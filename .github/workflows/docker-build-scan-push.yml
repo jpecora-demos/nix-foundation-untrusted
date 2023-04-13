@@ -1,0 +1,101 @@
+name: Docker Build/Scan/Push
+
+on:
+  push:
+    branches:
+      - main
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  Build-Scan-Push:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write
+    env:
+      IMAGE_REPO: jpecora/nix-foundation
+      IMAGE_TAG: latest
+      WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
+      WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4 # More information on this action can be found below in the 'AWS Credentials' section
+        with:
+          role-to-assume: arn:aws:iam::891376943487:role/Wiz-GitHub-jpecora-demos-pushECR
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+
+      - name: Build and export to Docker
+        id: build-docker
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        uses: docker/build-push-action@v6
+        with:
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
+
+      - name: Summarize the Docker digest and Image ID
+        run: |
+          echo 'Digest: ${{ steps.build-docker.outputs.digest }}'
+          echo 'ImageID: ${{ steps.build-docker.outputs.ImageID }}'
+
+      #- name: Build the latest Docker image
+      #  env:
+      #    REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      #  run: |
+      #    docker build -t ${REGISTRY}/${IMAGE_REPO}:${IMAGE_TAG} .
+      #    echo "REGISTRY=${REGISTRY}" >> "$GITHUB_ENV"
+
+      - name: Download Wiz CLI
+        run: curl -o wizcli https://wizcli.app.wiz.io/latest/wizcli && chmod +x wizcli
+
+      - name: Authenticate to Wiz
+        run: sudo -E ./wizcli auth
+
+      - name: Run Wiz CLI image scan
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        id: scan
+        run: |-
+          sudo -E ./wizcli docker scan -i ${REGISTRY}/${IMAGE_REPO}:${IMAGE_TAG} --policy-hits-only \
+          --dockerfile "./Dockerfile" --output wiz-output.json,sarif,true --tag github_action_run_id=${{ github.run_id }} \
+          --sbom-format spdx-json --sbom-output-file sbom.json
+        continue-on-error: true
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: wiz-output.json
+          category: wiz
+
+      - name: Push
+        id: push-docker
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
+
+      - name: Summarize the Docker digest and Image ID
+        run: |
+          echo 'Digest: ${{ steps.push-docker.outputs.digest }}'
+          echo 'ImageID: ${{ steps.push-docker.outputs.ImageID }}'
+
+      - name: Run Wiz CLI image tag
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: sudo -E ./wizcli docker tag -i ${REGISTRY}/${IMAGE_REPO}:${IMAGE_TAG}
+
