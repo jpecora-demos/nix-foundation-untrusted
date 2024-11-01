@@ -97,5 +97,5 @@ jobs:
       - name: Run Wiz CLI image tag
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: sudo -E ./wizcli docker tag -i ${REGISTRY}/${IMAGE_REPO}:${IMAGE_TAG}
+        run: sudo -E ./wizcli docker tag -i ${REGISTRY}/${IMAGE_REPO}:${IMAGE_TAG} --digest ${{ steps.push-docker.outputs.digest }}
 
