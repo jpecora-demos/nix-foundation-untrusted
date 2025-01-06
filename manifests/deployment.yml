@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nix-foundation-www
+  name: nix-foundation-www-untrusted
 spec:
   replicas: 1
   revisionHistoryLimit: 0
   selector:
     matchLabels:
-      app: nix-foundation-www
+      app: nix-foundation-www-untrusted
   template:
     metadata:
       labels:
-        app: nix-foundation-www
+        app: nix-foundation-www-untrusted
     spec:
       containers:
       - image: 376129875554.dkr.ecr.us-east-1.amazonaws.com/jpecora/nix-foundation-untrusted:latest
-        name: nix-foundation-www
+        name: nix-foundation-www-untrusted
         ports:
         - containerPort: 8080
