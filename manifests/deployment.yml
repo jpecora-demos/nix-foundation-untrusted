@@ -14,7 +14,7 @@ spec:
         app: nix-foundation-www-untrusted
     spec:
       containers:
-      - image: 376129875554.dkr.ecr.us-east-1.amazonaws.com/jpecora/nix-foundation-untrusted:latest
+      - image: 008971668377.dkr.ecr.us-east-1.amazonaws.com/jpecora/nix-foundation-untrusted:latest
         name: nix-foundation-www-untrusted
         ports:
         - containerPort: 8080
